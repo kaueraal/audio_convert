@@ -116,12 +116,11 @@ def filter_existing_targets(argument_tuples):
 
 
 def convert_file(source, target):
-    result = subprocess.run(conversion_command(source, target), stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-
-    if result.returncode != 0:
-        return result.stderr
-    else:
+    try:
+        subprocess.check_output(conversion_command(source, target), stderr=subprocess.PIPE, universal_newlines=True)
         return None
+    except subprocess.CalledProcessError as ex:
+        return ex.stderr
 
 
 def __convert_files_inner(tuple):

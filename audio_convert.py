@@ -127,7 +127,12 @@ def __convert_files_inner(tuple):
     try:
         create_dir(tuple[1])
         result = convert_file(tuple[0], tuple[1])
-        print(".", end="")
+
+        if result is None:
+            print(".", end="")
+        else:
+            print("e", end="")
+
         sys.stdout.flush()
         return result
     except Exception as ex:

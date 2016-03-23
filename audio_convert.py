@@ -15,8 +15,9 @@ TARGET="/some/target/directory/"
 FILE_TYPES = [ "flac", "mp3", "opus", "ogg" ]
 TARGET_TYPE= "opus"
 
-# Regular expressions
-IGNORE_PATHS = [ '\\.git/.*' ]
+# Regular expressions: Files to not convert and files to not delete
+IGNORE_SOURCE_FILES = [ '\.git/.*' ]
+IGNORE_TARGET_FILES = [ '\.stfolder', '\.stversions/.*' ]
 
 # Specify here the command and arguments for the conversion
 def conversion_command(source, target):
@@ -39,7 +40,8 @@ def preprocess_settings():
     global TARGET_TYPE
     global SOURCE
     global TARGET
-    global IGNORE_PATHS
+    global IGNORE_SOURCE_FILES
+    global IGNORE_TARGET_FILES
 
     tmp = FILE_TYPES
     FILE_TYPES = []
@@ -53,31 +55,30 @@ def preprocess_settings():
     SOURCE = os.path.normpath(SOURCE)
     TARGET = os.path.normpath(TARGET)
 
-    tmp = IGNORE_PATHS
-    IGNORE_PATHS = []
+    tmp = IGNORE_SOURCE_FILES
+    IGNORE_SOURCE_FILES = []
     for t in tmp:
-        IGNORE_PATHS.append(os.path.join(SOURCE, "") + t)
+        IGNORE_SOURCE_FILES.append(os.path.join(SOURCE, "") + t + "$")
+
+    tmp = IGNORE_TARGET_FILES
+    IGNORE_TARGET_FILES = []
+    for t in tmp:
+        IGNORE_TARGET_FILES.append(os.path.join(TARGET, "") + t + "$")
 
 
-# returns iterator over all files in given directory, filteres by ignore_paths and file_paths.
+# returns iterator over all files in given directory, filteres by ignore_files and accepted_file_types (if given).
 # Each file is given as (directory, filename)
-def get_files(dir, ignore_paths, file_types):
-    ignore_paths_compiled = list(map(re.compile, ignore_paths))
+def get_files(dir, ignore_files=None, accepted_file_types=None):
+    if ignore_files is not None:
+        ignore_files_compiled = list(map(re.compile, ignore_files))
+    else:
+        ignore_files_compiled = None
 
     for root, dirs, files in os.walk(dir):
-        if any(map(lambda r: r.match(os.path.join(root, "")) is not None, ignore_paths_compiled)):
-             continue
-
         for file in files:
-            if any(map(lambda t: file.endswith(t), file_types)):
+            if (accepted_file_types is None or any(map(lambda t: file.endswith(t), accepted_file_types))) and \
+                    (ignore_files_compiled is None or not any(map(lambda r: r.match(os.path.join(root, file)) is not None, ignore_files_compiled))):
                 yield os.path.join(root, file)
-
-
-# returns iterator over ALL files in given directory
-def get_files_all(dir):
-    for root, dirs, files in os.walk(dir):
-        for file in files:
-            yield os.path.join(root, file)
 
 
 # creates all directories for file
@@ -189,7 +190,7 @@ def delete_superfluous_files(argument_tuples, existing_files):
 
 preprocess_settings()
 
-files = get_files(SOURCE, IGNORE_PATHS, FILE_TYPES)
+files = get_files(SOURCE, IGNORE_SOURCE_FILES, FILE_TYPES)
 source_target_tuples = source_paths_to_source_target_paths(files, SOURCE, TARGET, FILE_TYPES, TARGET_TYPE)
 source_target_tuples, source_target_tuples_ = itertools.tee(source_target_tuples)
 filtered_tuples = filter_existing_targets(filter_existing_source(source_target_tuples_))
@@ -197,7 +198,7 @@ filtered_tuples = filter_existing_targets(filter_existing_source(source_target_t
 errorcode = convert_files(filtered_tuples)
 
 if errorcode == 0:
-    existing_target_files = get_files_all(TARGET)
+    existing_target_files = get_files(TARGET, IGNORE_TARGET_FILES)
     errorcode = delete_superfluous_files(source_target_tuples, existing_target_files)
 
 sys.exit(errorcode)
